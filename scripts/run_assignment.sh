@@ -18,7 +18,7 @@ assignment_number=${assignment: -1}
 
 echo "Building project $assignment"
 
-if [ "$assignment" != "tech_proj" ] && [ "$assignment" != "dirt_proj" ]
+if [ "$assignment" != "final_project" ] && [ "$assignment" != "dirt_proj" ]
 then
 	cmake --build ./build --config Release --target $assignment_name
 
