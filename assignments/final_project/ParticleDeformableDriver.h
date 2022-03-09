@@ -130,7 +130,7 @@ protected:
 		auto mesh_obj=Add_Interactive_Object<OpenGLTriangleMesh>();
 
 		Array<std::shared_ptr<TriangleMesh<3> > > meshes;
-		std::string obj_file_name = "/Users/dhyscuduke/Downloads/dartmouth-cg-starter-code-master/assignments/a1/bunny.obj";
+		std::string obj_file_name = "/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/bunny.obj";
 		Obj::Read_From_Obj_File(obj_file_name,meshes);
 		mesh_obj->mesh=*meshes[0];
 		//std::cout<<"load tri_mesh from obj file, #vtx: "<<mesh_obj->mesh.Vertices().size()<<", #ele: "<<mesh_obj->mesh.Elements().size()<<std::endl;		

@@ -1,4 +1,8 @@
-
+//#####################################################################
+// Particle Sand Driver
+// Dartmouth COSC 89.18/189.02: Computational Methods for Physical Systems, Assignment starter code
+// Contact: Bo Zhu (bo.zhu@dartmouth.edu)
+//#####################################################################
 #ifndef __DeformableObjectInteractiveDriver_h__
 #define __DeformableObjectInteractiveDriver_h__
 #include <memory>
