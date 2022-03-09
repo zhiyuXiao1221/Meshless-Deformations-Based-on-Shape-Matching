@@ -24,7 +24,7 @@ template<int d> class ParticleDeformableDriver : public InClassDemoDriver
 	double dt=.02;
 	ParticleDeformable<d> deformable_object;
 	std::vector<OpenGLPoint*> opengl_points;
-	std::string obj_mesh_name="assignments/a1/bunny.obj";	
+	std::string obj_mesh_name="/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/bunny.obj";	
 
 public:
 
@@ -59,7 +59,7 @@ public:
 
 	virtual void Initialize_Simulation_Data()
 	{
-		ReadFromObjFile();
+		ReadFromObjFile(obj_mesh_name);
 		Plane <d>* plane = new Plane<d>(VectorD::Unit(1), VectorD::Zero());
 		deformable_object.env_objects.push_back(plane);
 		deformable_object.Initialize();
@@ -125,12 +125,11 @@ protected:
 		opengl_point->Set_Data_Refreshed();
 		opengl_point->Initialize();
 	}
-	void ReadFromObjFile()
+	void ReadFromObjFile(std::string obj_file_name )
 	{
 		auto mesh_obj=Add_Interactive_Object<OpenGLTriangleMesh>();
 
 		Array<std::shared_ptr<TriangleMesh<3> > > meshes;
-		std::string obj_file_name = "/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/bunny.obj";
 		Obj::Read_From_Obj_File(obj_file_name,meshes);
 		mesh_obj->mesh=*meshes[0];
 		//std::cout<<"load tri_mesh from obj file, #vtx: "<<mesh_obj->mesh.Vertices().size()<<", #ele: "<<mesh_obj->mesh.Elements().size()<<std::endl;		
