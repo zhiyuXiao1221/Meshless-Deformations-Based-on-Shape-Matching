@@ -14,7 +14,20 @@
 template<int d> class ParticleDeformable
 {using VectorD=Vector<double,d>;using VectorDi=Vector<int,d>;using MatrixD=Matrix<double,d>;
 public:
+	bool just_released = false;
+	bool dragging = false;
+	VectorD handle_sphere_pos = VectorD::Zero();
+	VectorD init_handle_sphere_pos = VectorD::Zero();
+	int handle_sphere_idx = -1;
+	double handle_sphere_influenced_radius = 0.;
+	std::vector<int> handle_sphere_influenced_idx;
+	std::vector<double> handle_sphere_influenced_dist;
+	double handle_sphere_r = 0.;
+	int test = 1;
+	double dx = 1.;
 	double total_mass = 0.;
+	std::vector<int> fixed;
+	std::vector<double> phis;
 	std::vector<VectorD> init_positions;
 	std::vector<VectorD> qs;
 	std::vector<Vector<double, 9>> qs_tilde;
@@ -65,6 +78,8 @@ public:
 		//its important that we do this instead of A.inverse(), since direct solving will behave bad when we have entries like 1.e-15
 		Aqq = Aqq.llt().solve(Matrix3::Identity()); // LLT assumes that Aqq is symmetric positive definite
 		Aqq_tilde = Aqq_tilde.llt().solve(Eigen::Matrix<double, 9, 9>::Identity());
+
+		phis.resize(particles.Size());
 	}
 
 	// modify qs, qs_tilde, Aqq, Aqq_tilde to reflect plasticity
@@ -112,7 +127,7 @@ public:
 		Matrix3 S = (Apq.transpose() * Apq);
 		S = S.sqrt();
 		Matrix3 R = Apq * S.llt().solve(Matrix3::Identity());
-		//Matrix3 R = Matrix3::Identity();
+
 		for (int i = 0; i < particles.Size(); i++) {
 			VectorD gi = R * (qs[i]) + curr_COM;
 			particles.V(i) += alpha * 1. / dt * (gi - particles.X(i));
@@ -207,8 +222,6 @@ public:
 		//plasticity-related
 		Matrix3 SS = R.transpose() * A; // Note that this "S" in section 4.5 is not the same "S" in 3.3. 
 										//This one has scaling accounted for by Aqq. In 3.3, A_pq = RS, here, A = A_pq * A_qq = RS.
-		//std::cout << "SS: \n" << SS << std::endl;
-		//std::cout << "stress: " << (SS - Matrix3::Identity()).norm() << std::endl;
 		if ((SS - Matrix3::Identity()).norm() > c_yield) {
 			Sp = (Matrix3::Identity() + dt * c_creep * (SS - Matrix3::Identity())) * Sp;
 			if ((Sp - Matrix3::Identity()).norm() > c_max) {
@@ -236,6 +249,40 @@ public:
 		}
 	}
 
+	void Test_Specific_Vel_Operations() {
+		if (test == 2) {
+
+			//if (dragging) {
+			//	for (int i = 0; i < particles.Size(); i++) {
+			//		VectorD diff = handle_sphere_pos - particles.X(i);
+			//		VectorD change = 20. * diff;
+			//		decay = 1. / (1.5 * dx);
+			//		change *= exp(-decay * diff.norm());
+			//		particles.V(i) += change;
+			//	}
+			//}
+			if (dragging) {
+				for (int i = 0; i < handle_sphere_influenced_idx.size(); i++) {
+					VectorD diff = handle_sphere_pos - particles.X(handle_sphere_influenced_idx[i]);
+					VectorD change = 10. * diff;
+					decay = 3. / (handle_sphere_influenced_radius);
+					change *= exp(-decay * handle_sphere_influenced_dist[i]);
+					particles.V(handle_sphere_influenced_idx[i]) += change;
+				}
+			}
+
+			for (int i = 0; i < particles.Size(); i++) {
+				if (fixed[i]) {
+					particles.V(i) *= 0;
+				}
+			}
+		}
+	}
+
+	void Relocate_Handle(void) {
+		handle_sphere_pos = init_handle_sphere_pos;
+	}
+
 	virtual void Advance(const double dt)
 	{
 		////Clear forces on particles
@@ -248,20 +295,25 @@ public:
 		
 		//Shape_Match_Basic(dt);
 		//Shape_Match_Linear(dt);
-		//Shape_Match_Quadratic(dt);
-		Shape_Match_Quadratic_Plasticity(dt);
+		Shape_Match_Quadratic(dt);
+		//Shape_Match_Quadratic_Plasticity(dt);
 
 		for(int i=0;i<particles.Size();i++){
 			particles.V(i)+=particles.F(i)/particles.M(i)*dt;
 			particles.V(i)*=exp(-decay*dt);
-			particles.X(i)+=particles.V(i)*dt;}
+		}
+		
+		Test_Specific_Vel_Operations();
 
+		for (int i = 0; i < particles.Size(); i++) {
+			particles.X(i) += particles.V(i) * dt;
+		}
+		
 		Particle_Environment_Collision();
 	}
 
 	virtual void Particle_Environment_Collision()
 	{
-		/* Your implementation start */
 		for (int i = 0; i < particles.Size(); i++) {
 			double smallest_phi = std::numeric_limits<double>::max();
 			VectorD smallest_normal = VectorD::Zero();
@@ -273,6 +325,7 @@ public:
 					smallest_normal = env_objects[j]->Normal(curr_X);
 				}
 			}
+			phis[i] = smallest_phi;
 			if (smallest_phi < 0.) {
 				VectorD normal_velocity = particles.V(i).dot(smallest_normal) * smallest_normal;
 				VectorD tangential_velocity = particles.V(i) - normal_velocity;
@@ -284,7 +337,57 @@ public:
 				particles.X(i) += normal_displacement;
 			}
 		}
-		/* Your implementation end */
+	}
+
+	int Find_Nearest_Nb(VectorD pos) {
+		double smallest = std::numeric_limits<double>::max();
+		int smallest_nb = -1;
+		for (int i = 0; i < particles.Size(); i++) {
+			double dist = (particles.X(i) - pos).norm();
+			if (dist < smallest) {
+				smallest = dist;
+				smallest_nb = i;
+			}
+		}
+		return smallest_nb;
+	}
+
+	void Move_Left(void) {
+		handle_sphere_pos -= VectorD::Unit(0) * dx;
+	}
+	void Move_Right(void) {
+		handle_sphere_pos += VectorD::Unit(0) * dx;
+	}
+	void Move_Top(void) {
+		handle_sphere_pos += VectorD::Unit(1) * dx;
+	}
+	void Move_Bottom(void) {
+		handle_sphere_pos -= VectorD::Unit(1) * dx;
+	}
+	void Move_Front(void) {
+		handle_sphere_pos += VectorD::Unit(2) * dx;
+	}
+	void Move_Back(void) {
+		handle_sphere_pos -= VectorD::Unit(2) * dx;
+	}
+	void Toggle_On_Off(void) {
+		if (!dragging && !just_released) { //if was previously not dragging 
+			//regrasp
+			init_handle_sphere_pos = handle_sphere_pos;
+			handle_sphere_influenced_idx.clear();
+			handle_sphere_influenced_dist.clear();
+			for (int i = 0; i < particles.Size(); i++) {
+				double dist = (particles.X(i) - handle_sphere_pos).norm();
+				if (dist <= handle_sphere_influenced_radius) {
+					handle_sphere_influenced_idx.push_back(i);
+					handle_sphere_influenced_dist.push_back(dist);
+				}
+			}
+		}
+		else { // if was previously dragging
+			just_released = true;
+		}
+		dragging = !dragging;
 	}
 
 };
