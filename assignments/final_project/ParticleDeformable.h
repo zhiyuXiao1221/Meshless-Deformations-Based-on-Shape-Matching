@@ -50,6 +50,8 @@ public:
 
 	////a list of implicit geometries describing the environment, by default it has one element, a circle with its normals pointing inward (Bowl)
 	std::vector<ImplicitGeometry<d>* > env_objects;	
+	//springs if use mesh format
+	std::vector<Vector2i> springs;
 
 	void Initialize() {
 		for (int i = 0; i < particles.Size(); i++) {
@@ -250,7 +252,7 @@ public:
 	}
 
 	void Test_Specific_Vel_Operations() {
-		if (test == 2 || test == 3) {
+		if (test != 1) {
 
 			//if (dragging) {
 			//	for (int i = 0; i < particles.Size(); i++) {

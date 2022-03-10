@@ -133,7 +133,7 @@ class Segments
 public:
 	OpenGLSegmentMesh* opengl_segments=nullptr;
 	OpenGLViewer* driver=nullptr;
-	OpenGLColor default_color=OpenGLColor(.0,1.,.0,1.);
+	OpenGLColor default_color=OpenGLColor(.0,1.,.0,0.5);
 
 	void Initialize(OpenGLViewer* _driver)
 	{

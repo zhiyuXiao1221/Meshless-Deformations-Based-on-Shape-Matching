@@ -8,12 +8,15 @@
 #include <random>
 #include "Common.h"
 #include "Driver.h"
+#include "Mesh.h"
 #include "OpenGLMarkerObjects.h"
 #include "OpenGLCommon.h"
 #include "OpenGLWindow.h"
 #include "OpenGLViewer.h"
+#include "OpenGLMesh.h"
 #include "ParticleDeformable.h"
 #include "InClassDemoDriver.h"
+#include "TinyObjLoader.h"
 
 template<int d> class ParticleDeformableDriver : public InClassDemoDriver
 {using VectorD=Vector<double,d>;using VectorDi=Vector<int,d>;using Base=Driver;
@@ -22,7 +25,9 @@ template<int d> class ParticleDeformableDriver : public InClassDemoDriver
 	ParticleDeformable<d> deformable_object;
 	std::vector<OpenGLPoint*> opengl_points;
 	OpenGLSphere* handle_sphere;
-
+	std::string obj_mesh_name="/Users/dhyscuduke/Downloads/dartmouth-cg-starter-code-master/assignments/a1/bunny.obj";								////obj file name
+	std::vector<Point> points;
+	Segments segments;
 public:
 
 	void Initialize_Lattice_Points(double x_span, double y_span, double z_span, double dx, 
@@ -78,7 +83,7 @@ public:
 		deformable_object.handle_sphere_idx = deformable_object.Find_Nearest_Nb(desired_pos);
 		deformable_object.handle_sphere_pos = deformable_object.particles.X(deformable_object.handle_sphere_idx);
 		deformable_object.init_handle_sphere_pos = deformable_object.handle_sphere_pos;
-		deformable_object.handle_sphere_r = 3 * dx;
+		deformable_object.handle_sphere_r = dx;
 
 		for (int i = 0; i < deformable_object.particles.Size(); i++) {
 			if (deformable_object.particles.X(i)[1] - (elevation - two_sided_length / 2.) < 0.5 * dx) {
@@ -99,17 +104,16 @@ public:
 	}
 	
 	void Initialize_3() {
-		double dx = 0.03;
+		double dx = 0.02;
 		deformable_object.dx = dx;
 		double two_sided_length = 0.3;
 		double elevation = two_sided_length / 2.;
-		Initialize_Lattice_Points(two_sided_length, two_sided_length, two_sided_length, dx, 0., elevation, 0.0, 0, 0., 0.0);
-
+		Read_From_Obj(obj_mesh_name);
 		VectorD desired_pos = (elevation + two_sided_length/2.) * VectorD::Unit(1) - two_sided_length / 2. * VectorD::Unit(0) - two_sided_length / 2. * VectorD::Unit(2);
 		deformable_object.handle_sphere_idx = deformable_object.Find_Nearest_Nb(desired_pos);
 		deformable_object.handle_sphere_pos = deformable_object.particles.X(deformable_object.handle_sphere_idx);
 		deformable_object.init_handle_sphere_pos = deformable_object.handle_sphere_pos;
-		deformable_object.handle_sphere_r = 3 * dx;
+		deformable_object.handle_sphere_r = 0.01;
 
 		for (int i = 0; i < deformable_object.particles.Size(); i++) {
 			if (deformable_object.particles.X(i)[1] - (elevation - two_sided_length / 2.) < 0.5 * dx) {
@@ -130,12 +134,13 @@ public:
 	}
 	virtual void Initialize_Simulation_Data()
 	{
-		int test = 2;
+		int test = 3;
 		deformable_object.test = test;
 		switch (test) {
 		case 1:	Initialize_1(); break; //Lattice dropping to floor
 		case 2:	Initialize_2(); break; //Lattice deformed by force
 		case 3:	Initialize_3(); break; //Bunny deformed by force
+		case 4:	Initialize_3(); break; //Bunny mesh deformed by force
 		}
 		deformable_object.Initialize();
 	}
@@ -146,12 +151,17 @@ public:
 		//synchronize simulation data
 		Initialize_Simulation_Data();
 		//synchronize visualization data
-		for(int i=0;i< deformable_object.particles.Size();i++){
+		if(deformable_object.test != 4)
+		{
+			for(int i=0;i< deformable_object.particles.Size();i++){
 			Add_Solid_Point(i);
+			}
+		}else {
+			Add_Solid_Sphere();
 		}
 		
-		if(deformable_object.test == 2 ||
-		 deformable_object.test == 3 ) 
+		
+		if(deformable_object.test != 1 ) 
 		{
 			Add_handle();
 		}
@@ -160,14 +170,22 @@ public:
 
 	void Sync_Simulation_And_Visualization_Data()
 	{
-		for(int i=0;i<deformable_object.particles.Size();i++){
+		if(deformable_object.test != 4)
+		{
+			for(int i=0;i<deformable_object.particles.Size();i++){
 			auto opengl_point=opengl_points[i];
 			opengl_point->pos=V3(deformable_object.particles.X(i));
 			opengl_point->Set_Data_Refreshed();
+			}
+		}else {
+			segments.Sync_Data(deformable_object.particles.XRef());
+			int n=deformable_object.particles.Size();
+			for(int i=0;i<n;i++){
+			points[i].Sync_Data(deformable_object.particles.X(i));
+			}
 		}
 
-		if(deformable_object.test == 2 ||
-		 deformable_object.test == 3)
+		if(deformable_object.test != 1)
 		{
 			handle_sphere->pos = deformable_object.handle_sphere_pos;
 			if (deformable_object.dragging) {
@@ -273,13 +291,30 @@ protected:
 		deformable_object.particles.R(i)=r;
 		deformable_object.particles.M(i)=m;
 	}
-
+    void Add_Solid_Sphere()
+	{
+		segments.Initialize(this);
+		segments.Sync_Data(deformable_object.particles.XRef(),deformable_object.springs);
+		int n=deformable_object.particles.Size();
+		points.resize(n);
+		for(int i=0;i<n;i++){
+			points[i].Set_Radius(.001);
+			points[i].Initialize(this);
+			points[i].Sync_Data(deformable_object.particles.X(i));
+		}
+	}
 	void Add_Solid_Point(const int i)
 	{
 		OpenGLColor c;
-		for (int i = 0; i < 3; i++) {
+		if(deformable_object.test == 3) {
+			double random = (double) ((rand() % 1000) / 1000.f);
+			c = OpenGLColor(1.0 * random, (1.0- random) * 1.0,0.,1.);
+		}else {
+			for (int i = 0; i < 3; i++) {
 			c.rgba[i] = static_cast<float>(rand() % 1000) / 1000.f;
+			}
 		}
+		
 		auto opengl_point = Add_Interactive_Object<OpenGLPoint>();
 		opengl_points.push_back(opengl_point);
 		opengl_point->pos = V3(deformable_object.particles.X(i));
@@ -292,10 +327,37 @@ protected:
 	{
 		handle_sphere = Add_Interactive_Object<OpenGLSphere>();
 		handle_sphere->pos = deformable_object.handle_sphere_pos;
-		handle_sphere->radius = deformable_object.dx; // deformable_object.handle_sphere_r;
+		handle_sphere->radius = deformable_object.handle_sphere_r;
 		handle_sphere->color = OpenGLColor(static_cast < float> (1.), static_cast < float>(0.2), static_cast < float>(0.));
 		handle_sphere->Set_Data_Refreshed();
 		handle_sphere->Initialize();
+	}
+	void Read_From_Obj(std::string objFile) {
+		auto mesh_obj=Add_Interactive_Object<OpenGLTriangleMesh>();
+		Array<std::shared_ptr<TriangleMesh<3> > > meshes;
+		Obj::Read_From_Obj_File(objFile,meshes);
+		mesh_obj->mesh=*meshes[0];
+		int n=(int)mesh_obj->mesh.Vertices().size();
+		deformable_object.particles.Resize(n);
+		for(int i=0;i<n;i++){
+			deformable_object.particles.X(i)=mesh_obj->mesh.Vertices()[i];
+			deformable_object.particles.M(i)=(double)1;
+			deformable_object.particles.V(i)=VectorD::Zero();
+			deformable_object.particles.R(i)=(double)0.01;
+			}
+		if(deformable_object.test == 4) {
+			std::vector<Vector2i> edges;Get_Mesh_Edges(mesh_obj->mesh,edges);
+			deformable_object.springs=edges;
+		}
+	}
+	void Get_Mesh_Edges(const TriangleMesh<3>& mesh,std::vector<Vector2i>& edges)
+	{
+		Hashset<Vector2i> edge_hashset;ArrayF<Vector2i,6> element_edges;
+		for(const auto& vtx:mesh.elements){
+			edge_hashset.insert(Sorted(Vector2i(vtx[0],vtx[1])));
+			edge_hashset.insert(Sorted(Vector2i(vtx[1],vtx[2])));
+			edge_hashset.insert(Sorted(Vector2i(vtx[2],vtx[0])));}
+		for(const auto& edge:edge_hashset)edges.push_back(edge);
 	}
 	
 
