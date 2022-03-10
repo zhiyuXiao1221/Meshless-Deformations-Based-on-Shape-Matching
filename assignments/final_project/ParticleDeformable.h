@@ -250,7 +250,7 @@ public:
 	}
 
 	void Test_Specific_Vel_Operations() {
-		if (test == 2) {
+		if (test == 2 || test == 3) {
 
 			//if (dragging) {
 			//	for (int i = 0; i < particles.Size(); i++) {

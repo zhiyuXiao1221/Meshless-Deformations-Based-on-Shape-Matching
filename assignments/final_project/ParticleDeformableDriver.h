@@ -97,13 +97,45 @@ public:
 		Plane <d>* plane = new Plane<d>(VectorD::Unit(1), VectorD::Zero());
 		deformable_object.env_objects.push_back(plane);
 	}
+	
+	void Initialize_3() {
+		double dx = 0.03;
+		deformable_object.dx = dx;
+		double two_sided_length = 0.3;
+		double elevation = two_sided_length / 2.;
+		Initialize_Lattice_Points(two_sided_length, two_sided_length, two_sided_length, dx, 0., elevation, 0.0, 0, 0., 0.0);
+
+		VectorD desired_pos = (elevation + two_sided_length/2.) * VectorD::Unit(1) - two_sided_length / 2. * VectorD::Unit(0) - two_sided_length / 2. * VectorD::Unit(2);
+		deformable_object.handle_sphere_idx = deformable_object.Find_Nearest_Nb(desired_pos);
+		deformable_object.handle_sphere_pos = deformable_object.particles.X(deformable_object.handle_sphere_idx);
+		deformable_object.init_handle_sphere_pos = deformable_object.handle_sphere_pos;
+		deformable_object.handle_sphere_r = 3 * dx;
+
+		for (int i = 0; i < deformable_object.particles.Size(); i++) {
+			if (deformable_object.particles.X(i)[1] - (elevation - two_sided_length / 2.) < 0.5 * dx) {
+				deformable_object.fixed.push_back(1);
+			}
+			else {
+				deformable_object.fixed.push_back(0);
+			}
+		}
+
+		double influence_radius = 6. * dx;
+		deformable_object.handle_sphere_influenced_radius = influence_radius;
+
+		//Bowl<d> *bowl=new Bowl<d>(VectorD::Unit(1)*8,8);
+		//deformable_object.env_objects.push_back(bowl);
+		Plane <d>* plane = new Plane<d>(VectorD::Unit(1), VectorD::Zero());
+		deformable_object.env_objects.push_back(plane);
+	}
 	virtual void Initialize_Simulation_Data()
 	{
-		int test = 1;
+		int test = 2;
 		deformable_object.test = test;
 		switch (test) {
 		case 1:	Initialize_1(); break; //Lattice dropping to floor
 		case 2:	Initialize_2(); break; //Lattice deformed by force
+		case 3:	Initialize_3(); break; //Bunny deformed by force
 		}
 		deformable_object.Initialize();
 	}
@@ -111,11 +143,15 @@ public:
 	////synchronize simulation data to visualization data
 	virtual void Initialize_Data()
 	{
+		//synchronize simulation data
 		Initialize_Simulation_Data();
+		//synchronize visualization data
 		for(int i=0;i< deformable_object.particles.Size();i++){
 			Add_Solid_Point(i);
 		}
-		if(deformable_object.test == 2) 
+		
+		if(deformable_object.test == 2 ||
+		 deformable_object.test == 3 ) 
 		{
 			Add_handle();
 		}
@@ -130,7 +166,8 @@ public:
 			opengl_point->Set_Data_Refreshed();
 		}
 
-		if(deformable_object.test == 2)
+		if(deformable_object.test == 2 ||
+		 deformable_object.test == 3)
 		{
 			handle_sphere->pos = deformable_object.handle_sphere_pos;
 			if (deformable_object.dragging) {
