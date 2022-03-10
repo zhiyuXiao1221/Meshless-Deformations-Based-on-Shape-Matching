@@ -27,17 +27,19 @@ template<int d> class ParticleDeformableDriver : public InClassDemoDriver
 	OpenGLSphere* handle_sphere;							////obj file name
 	std::vector<Point> points;
 	Segments segments;
+	OpenGLTriangleMesh *mesh_object;
 public:
 	virtual void Initialize_Simulation_Data()
 	{
-		int test = 5;
+		int test = 6;
 		deformable_object.test = test;
 		switch (test) {
 		case 1:	Initialize_1(); break; //Lattice dropping to floor
 		case 2:	Initialize_2(); break; //Lattice deformed by force
 		case 3:	Initialize_3(); break; //Bunny deformed by force
-		case 4:	Initialize_3(); break; //Bunny mesh deformed by force
-		case 5:	Initialize_5(); break; //Cube mesh deformed by force
+		case 4:	Initialize_4(); break; //Bunny spring deformed by force
+		case 5:	Initialize_5(); break; //Cube spring deformed by force
+		case 6:	Initialize_4(); break; //Bunny mesh(with texture) deformed by force
 		}
 		deformable_object.Initialize();
 	}
@@ -116,11 +118,43 @@ public:
 	}
 	
 	void Initialize_3() {
-		double dx = 0.005;
+		double dx = 0.03;
 		deformable_object.dx = dx;
 		double two_sided_length = 0.3;
 		double elevation = two_sided_length / 2.;
-		std::string obj_mesh_name="/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/cube.obj";	
+		std::string obj_mesh_name="/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/bunny.obj";	
+		Read_From_Obj(obj_mesh_name,0.005);
+		VectorD desired_pos = (elevation + two_sided_length/2.) * VectorD::Unit(1) - two_sided_length / 2. * VectorD::Unit(0) - two_sided_length / 2. * VectorD::Unit(2);
+		deformable_object.handle_sphere_idx = deformable_object.Find_Nearest_Nb(desired_pos);
+		deformable_object.handle_sphere_pos = deformable_object.particles.X(deformable_object.handle_sphere_idx);
+		deformable_object.init_handle_sphere_pos = deformable_object.handle_sphere_pos;
+		deformable_object.handle_sphere_r = 0.01;
+
+		for (int i = 0; i < deformable_object.particles.Size(); i++) {
+			if (deformable_object.particles.X(i)[1] <=  0.02) {
+				deformable_object.fixed.push_back(1);
+			}
+			else {
+				deformable_object.fixed.push_back(0);
+			}
+		}
+
+		double influence_radius = 3. * dx;
+		deformable_object.handle_sphere_influenced_radius = influence_radius;
+
+		//Bowl<d> *bowl=new Bowl<d>(VectorD::Unit(1)*8,8);
+		//deformable_object.env_objects.push_back(bowl);
+		Plane <d>* plane = new Plane<d>(VectorD::Unit(1), VectorD::Zero());
+		deformable_object.env_objects.push_back(plane);
+	}
+
+		
+	void Initialize_4() {
+		double dx = 0.02;
+		deformable_object.dx = dx;
+		double two_sided_length = 0.3;
+		double elevation = two_sided_length / 2.;
+		std::string obj_mesh_name="/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/bunny.obj";	
 		Read_From_Obj(obj_mesh_name,0.001);
 		VectorD desired_pos = (elevation + two_sided_length/2.) * VectorD::Unit(1) - two_sided_length / 2. * VectorD::Unit(0) - two_sided_length / 2. * VectorD::Unit(2);
 		deformable_object.handle_sphere_idx = deformable_object.Find_Nearest_Nb(desired_pos);
@@ -129,7 +163,7 @@ public:
 		deformable_object.handle_sphere_r = 0.01;
 
 		for (int i = 0; i < deformable_object.particles.Size(); i++) {
-			if (deformable_object.particles.X(i)[1] - (elevation - two_sided_length / 2.) < 0.5 * dx) {
+			if (deformable_object.particles.X(i)[1] <= 0.02) {
 				deformable_object.fixed.push_back(1);
 			}
 			else {
@@ -137,7 +171,7 @@ public:
 			}
 		}
 
-		double influence_radius = 6. * dx;
+		double influence_radius = 3. * dx;
 		deformable_object.handle_sphere_influenced_radius = influence_radius;
 
 		//Bowl<d> *bowl=new Bowl<d>(VectorD::Unit(1)*8,8);
@@ -181,16 +215,42 @@ public:
 		//synchronize simulation data
 		Initialize_Simulation_Data();
 		//synchronize visualization data
-		if(deformable_object.test >3) {
+		if(deformable_object.test !=6) {
+			if(deformable_object.test >3) {
 			Add_Solid_Sphere();
-		}else {
+			}
+			else {
 			for(int i=0;i< deformable_object.particles.Size();i++){
 			Add_Solid_Point(i);}
+			}
 		}	
 		if(deformable_object.test != 1 ) 
 		{
 			Add_handle();
 		}
+		//mesh project part for test = 6
+		if(deformable_object.test == 6) {
+			Update_Vertex_Color_And_Normal_For_Mesh_Object(mesh_object);
+			Update_Vertex_UV_For_Mesh_Object(mesh_object);
+			////initialize shader
+		std::string fileRoot = "/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/assignments/final_project/";
+		std::string vertex_shader_file_name= fileRoot + "normal_mapping.vert";		
+		std::string fragment_shader_file_name=fileRoot + "normal_mapping.frag";		
+		OpenGLShaderLibrary::Instance()->Add_Shader_From_File(vertex_shader_file_name,fragment_shader_file_name,"my_shader");
+
+		////specifying the textures
+		OpenGLTextureLibrary::Instance()->Add_Texture_From_File(fileRoot+"bunny.jpg", "albedo");		
+		OpenGLTextureLibrary::Instance()->Add_Texture_From_File(fileRoot+"earth_normal.png", "normal");		
+		////bind the shader with each mesh object in the object array
+			mesh_object->Add_Shader_Program(OpenGLShaderLibrary::Get_Shader("my_shader"));
+			mesh_object->Add_Texture("tex_albedo", OpenGLTextureLibrary::Get_Texture("albedo"));
+			mesh_object->Add_Texture("tex_normal", OpenGLTextureLibrary::Get_Texture("normal"));
+			Set_Polygon_Mode(mesh_object,PolygonMode::Fill);
+			Set_Shading_Mode(mesh_object,ShadingMode::Texture);
+			mesh_object->Set_Data_Refreshed();
+			mesh_object->Initialize();	
+		}
+			
 
 	}
 
@@ -204,10 +264,12 @@ public:
 			opengl_point->Set_Data_Refreshed();
 			}
 		}else {
-			segments.Sync_Data(deformable_object.particles.XRef());
-			int n=deformable_object.particles.Size();
-			for(int i=0;i<n;i++){
-			points[i].Sync_Data(deformable_object.particles.X(i));
+			if(deformable_object.test!=6) {
+				segments.Sync_Data(deformable_object.particles.XRef());
+				int n=deformable_object.particles.Size();
+				for(int i=0;i<n;i++){
+				points[i].Sync_Data(deformable_object.particles.X(i));
+			}
 			}
 		}
 
@@ -221,6 +283,13 @@ public:
 			handle_sphere->color = OpenGLColor(static_cast <float> (1.), static_cast <float>(0.2), static_cast <float>(0.));
 			}
 			handle_sphere->Set_Data_Refreshed();
+		}
+		if(deformable_object.test == 6) {
+			int n=deformable_object.particles.Size();
+			for(int i=0;i<n;i++){
+				mesh_object->mesh.Vertices()[i] = deformable_object.particles.X(i);
+				mesh_object->Set_Data_Refreshed();
+			}
 		}
 	}
 
@@ -363,6 +432,7 @@ protected:
 		Array<std::shared_ptr<TriangleMesh<3> > > meshes;
 		Obj::Read_From_Obj_File(objFile,meshes);
 		mesh_obj->mesh=*meshes[0];
+		mesh_object = mesh_obj;
 		int n=(int)mesh_obj->mesh.Vertices().size();
 		deformable_object.particles.Resize(n);
 		for(int i=0;i<n;i++){
@@ -386,6 +456,49 @@ protected:
 		for(const auto& edge:edge_hashset)edges.push_back(edge);
 	}
 	
+	//mesh part
+		void Update_Vertex_Color_And_Normal_For_Mesh_Object(OpenGLTriangleMesh* obj)
+	{
+		int vn=(int)obj->mesh.Vertices().size();					////number of vertices of a mesh
+		std::vector<Vector3>& vertices=obj->mesh.Vertices();		////you might find this array useful
+		std::vector<Vector3i>& elements=obj->mesh.Elements();		////you might find this array also useful
+
+		std::vector<Vector4f>& vtx_color=obj->vtx_color;
+		vtx_color.resize(vn);
+		std::fill(vtx_color.begin(),vtx_color.end(),Vector4f::Zero());
+
+		for(int i=0;i<vn;i++){
+			vtx_color[i]=Vector4f(0.,1.,0.,1.);	////specify color for each vertex
+		}
+		std::vector<Vector2>& uv=obj->mesh.Uvs();
+		
+	}
+		void Update_Vertex_UV_For_Mesh_Object(OpenGLTriangleMesh* obj)
+	{
+		int vn=(int)obj->mesh.Vertices().size();					////number of vertices of a mesh
+		std::vector<Vector3>& vertices=obj->mesh.Vertices();		////you might find this array useful
+		std::vector<Vector2>& uv=obj->mesh.Uvs();					////you need to set values in uv to specify the texture coordinates
+		uv.resize(vn);
+		for(int i=0;i<vn;i++){uv[i]=Vector2(0.,0.);}				////set uv to be zero by default
+
+		Update_Uv_Using_Spherical_Coordinates(vertices,uv);
+	}
+
+	////TODO [Step 0]: update the uv coordinates for each vertex using the spherical coordinates.
+	////NOTICE: This code updates the vertex color array on the CPU end. The array will then be sent to GPU and read it the vertex shader as v_color.
+	////You don't need to implement the CPU-GPU data transfer code.
+	void Update_Uv_Using_Spherical_Coordinates(const std::vector<Vector3>& vertices,std::vector<Vector2>& uv)
+	{
+		/*Your implementation starts*/	
+		for(int i=0;i<vertices.size();i++){
+			Vector3 vertex = vertices[i];
+			double r = sqrt(pow(vertex[0],2)+pow(vertex[1],2)+pow(vertex[2],2));
+			float u = (float)atan2(vertex[1],vertex[0])/(2*M_PI);
+			float v = (float)acos(vertex[2]/r)/(M_PI);
+			uv[i]=Vector2(u,v);
+		}
+		/*Your implementation ends*/
+	}
 
 	////Helper function to convert a vector to 3d, for c++ template
 	Vector3 V3(const Vector2& v2){return Vector3(v2[0],v2[1],.0);}

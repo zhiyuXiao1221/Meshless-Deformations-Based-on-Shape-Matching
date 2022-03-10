@@ -5,7 +5,6 @@
 //#####################################################################
 #include <iostream>
 #include "ParticleDeformableDriver.h"
-#include "DeformableObjectInteractiveDriver.h"
 #ifndef __Main_cpp__
 #define __Main_cpp__
 
@@ -20,13 +19,6 @@ int main(int argc,char* argv[])
 		driver.Initialize();
 		driver.Run();	
 	}break;
-	case 2:{
-		DeformableObjectInteractiveDriver driver;
-		driver.scale=1;
-		driver.test=4;
-		driver.Initialize();
-		driver.Run();
-	}
 	}
 }
 
