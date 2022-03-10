@@ -24,11 +24,23 @@ template<int d> class ParticleDeformableDriver : public InClassDemoDriver
 	double dt=.02;
 	ParticleDeformable<d> deformable_object;
 	std::vector<OpenGLPoint*> opengl_points;
-	OpenGLSphere* handle_sphere;
-	std::string obj_mesh_name="/Users/dhyscuduke/Downloads/dartmouth-cg-starter-code-master/assignments/a1/bunny.obj";								////obj file name
+	OpenGLSphere* handle_sphere;							////obj file name
 	std::vector<Point> points;
 	Segments segments;
 public:
+	virtual void Initialize_Simulation_Data()
+	{
+		int test = 5;
+		deformable_object.test = test;
+		switch (test) {
+		case 1:	Initialize_1(); break; //Lattice dropping to floor
+		case 2:	Initialize_2(); break; //Lattice deformed by force
+		case 3:	Initialize_3(); break; //Bunny deformed by force
+		case 4:	Initialize_3(); break; //Bunny mesh deformed by force
+		case 5:	Initialize_5(); break; //Cube mesh deformed by force
+		}
+		deformable_object.Initialize();
+	}
 
 	void Initialize_Lattice_Points(double x_span, double y_span, double z_span, double dx, 
 		double x_offset = 0., double y_offset = 0., double z_offset = 0., 
@@ -104,11 +116,12 @@ public:
 	}
 	
 	void Initialize_3() {
-		double dx = 0.02;
+		double dx = 0.005;
 		deformable_object.dx = dx;
 		double two_sided_length = 0.3;
 		double elevation = two_sided_length / 2.;
-		Read_From_Obj(obj_mesh_name);
+		std::string obj_mesh_name="/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/cube.obj";	
+		Read_From_Obj(obj_mesh_name,0.001);
 		VectorD desired_pos = (elevation + two_sided_length/2.) * VectorD::Unit(1) - two_sided_length / 2. * VectorD::Unit(0) - two_sided_length / 2. * VectorD::Unit(2);
 		deformable_object.handle_sphere_idx = deformable_object.Find_Nearest_Nb(desired_pos);
 		deformable_object.handle_sphere_pos = deformable_object.particles.X(deformable_object.handle_sphere_idx);
@@ -132,18 +145,35 @@ public:
 		Plane <d>* plane = new Plane<d>(VectorD::Unit(1), VectorD::Zero());
 		deformable_object.env_objects.push_back(plane);
 	}
-	virtual void Initialize_Simulation_Data()
-	{
-		int test = 3;
-		deformable_object.test = test;
-		switch (test) {
-		case 1:	Initialize_1(); break; //Lattice dropping to floor
-		case 2:	Initialize_2(); break; //Lattice deformed by force
-		case 3:	Initialize_3(); break; //Bunny deformed by force
-		case 4:	Initialize_3(); break; //Bunny mesh deformed by force
+		
+	void Initialize_5() {
+		double dx = 0.02;
+		std::string obj_mesh_name="/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/cube.obj";	
+		Read_From_Obj(obj_mesh_name,0.03);
+		deformable_object.handle_sphere_idx = 5;
+		deformable_object.handle_sphere_pos = deformable_object.particles.X(deformable_object.handle_sphere_idx);
+		deformable_object.init_handle_sphere_pos = deformable_object.handle_sphere_pos;
+		deformable_object.handle_sphere_r = 0.1;
+
+		for (int i = 0; i < deformable_object.particles.Size(); i++) {
+			if (deformable_object.particles.X(i)[1] <= 0.082379) {
+				deformable_object.fixed.push_back(1);
+			}
+			else {
+				deformable_object.fixed.push_back(0);
+			}
 		}
-		deformable_object.Initialize();
+
+		double influence_radius = 3. * dx;
+		deformable_object.handle_sphere_influenced_radius = influence_radius;
+
+		//Bowl<d> *bowl=new Bowl<d>(VectorD::Unit(1)*8,8);
+		//deformable_object.env_objects.push_back(bowl);
+		Plane <d>* plane = new Plane<d>(VectorD::Unit(1), VectorD::Zero());
+		deformable_object.env_objects.push_back(plane);
 	}
+
+	
 
 	////synchronize simulation data to visualization data
 	virtual void Initialize_Data()
@@ -151,16 +181,12 @@ public:
 		//synchronize simulation data
 		Initialize_Simulation_Data();
 		//synchronize visualization data
-		if(deformable_object.test != 4)
-		{
-			for(int i=0;i< deformable_object.particles.Size();i++){
-			Add_Solid_Point(i);
-			}
-		}else {
+		if(deformable_object.test >3) {
 			Add_Solid_Sphere();
-		}
-		
-		
+		}else {
+			for(int i=0;i< deformable_object.particles.Size();i++){
+			Add_Solid_Point(i);}
+		}	
 		if(deformable_object.test != 1 ) 
 		{
 			Add_handle();
@@ -170,7 +196,7 @@ public:
 
 	void Sync_Simulation_And_Visualization_Data()
 	{
-		if(deformable_object.test != 4)
+		if(deformable_object.test < 4)
 		{
 			for(int i=0;i<deformable_object.particles.Size();i++){
 			auto opengl_point=opengl_points[i];
@@ -298,7 +324,7 @@ protected:
 		int n=deformable_object.particles.Size();
 		points.resize(n);
 		for(int i=0;i<n;i++){
-			points[i].Set_Radius(.001);
+			points[i].Set_Radius(deformable_object.particles.R(i));
 			points[i].Initialize(this);
 			points[i].Sync_Data(deformable_object.particles.X(i));
 		}
@@ -332,7 +358,7 @@ protected:
 		handle_sphere->Set_Data_Refreshed();
 		handle_sphere->Initialize();
 	}
-	void Read_From_Obj(std::string objFile) {
+	void Read_From_Obj(std::string objFile,double raduis) {
 		auto mesh_obj=Add_Interactive_Object<OpenGLTriangleMesh>();
 		Array<std::shared_ptr<TriangleMesh<3> > > meshes;
 		Obj::Read_From_Obj_File(objFile,meshes);
@@ -343,9 +369,9 @@ protected:
 			deformable_object.particles.X(i)=mesh_obj->mesh.Vertices()[i];
 			deformable_object.particles.M(i)=(double)1;
 			deformable_object.particles.V(i)=VectorD::Zero();
-			deformable_object.particles.R(i)=(double)0.01;
+			deformable_object.particles.R(i)=raduis;
 			}
-		if(deformable_object.test == 4) {
+		if(deformable_object.test > 3) {
 			std::vector<Vector2i> edges;Get_Mesh_Edges(mesh_obj->mesh,edges);
 			deformable_object.springs=edges;
 		}
