@@ -15,7 +15,7 @@
 #include "ParticleDeformable.h"
 #include "InClassDemoDriver.h"
 
-template<int d> class ParticleDeformableDriver : public Driver, public OpenGLViewer
+template<int d> class ParticleDeformableDriver : public InClassDemoDriver
 {using VectorD=Vector<double,d>;using VectorDi=Vector<int,d>;using Base=Driver;
 	double scale = 1.;
 	double dt=.02;
@@ -54,15 +54,6 @@ public:
 		}
 	}
 
-	virtual void Initialize()
-	{
-		int test = 2;
-		deformable_object.test = test;
-		switch (test) {
-		case 1:	Initialize_1(); break; //Lattice dropping to floor
-		case 2:	Initialize_2(); break; //Lattice deformed by force
-		}
-	}
 
 	void Initialize_1() {
 		double dx = 0.03;
@@ -74,9 +65,6 @@ public:
 		Plane <d>* plane = new Plane<d>(VectorD::Unit(1), VectorD::Zero());
 		deformable_object.env_objects.push_back(plane);
 
-		////viewer initialization, initialize visualization data
-		OpenGLViewer::Initialize();
-		deformable_object.Initialize();
 	}
 
 	void Initialize_2() {
@@ -108,25 +96,30 @@ public:
 		//deformable_object.env_objects.push_back(bowl);
 		Plane <d>* plane = new Plane<d>(VectorD::Unit(1), VectorD::Zero());
 		deformable_object.env_objects.push_back(plane);
-
-		////viewer initialization, initialize visualization data
-		OpenGLViewer::Initialize();
+	}
+	virtual void Initialize_Simulation_Data()
+	{
+		int test = 1;
+		deformable_object.test = test;
+		switch (test) {
+		case 1:	Initialize_1(); break; //Lattice dropping to floor
+		case 2:	Initialize_2(); break; //Lattice deformed by force
+		}
 		deformable_object.Initialize();
 	}
 
 	////synchronize simulation data to visualization data
 	virtual void Initialize_Data()
 	{
+		Initialize_Simulation_Data();
 		for(int i=0;i< deformable_object.particles.Size();i++){
 			Add_Solid_Point(i);
 		}
+		if(deformable_object.test == 2) 
+		{
+			Add_handle();
+		}
 
-		handle_sphere = Add_Interactive_Object<OpenGLSphere>();
-		handle_sphere->pos = deformable_object.handle_sphere_pos;
-		handle_sphere->radius = deformable_object.dx; // deformable_object.handle_sphere_r;
-		handle_sphere->color = OpenGLColor(static_cast < float> (1.), static_cast < float>(0.2), static_cast < float>(0.));
-		handle_sphere->Set_Data_Refreshed();
-		handle_sphere->Initialize();
 	}
 
 	void Sync_Simulation_And_Visualization_Data()
@@ -137,27 +130,23 @@ public:
 			opengl_point->Set_Data_Refreshed();
 		}
 
-		handle_sphere->pos = deformable_object.handle_sphere_pos;
-		if (deformable_object.dragging) {
+		if(deformable_object.test == 2)
+		{
+			handle_sphere->pos = deformable_object.handle_sphere_pos;
+			if (deformable_object.dragging) {
 			handle_sphere->color = OpenGLColor(static_cast <float> (0.2), static_cast <float>(1.0), static_cast <float>(0.));
-		}
-		else {
+			}
+			else {
 			handle_sphere->color = OpenGLColor(static_cast <float> (1.), static_cast <float>(0.2), static_cast <float>(0.));
+			}
+			handle_sphere->Set_Data_Refreshed();
 		}
-		handle_sphere->Set_Data_Refreshed();
 	}
 
-	////update simulation and visualization for each time step
-	virtual void Toggle_Next_Frame()
+	////advance simulation timesteps
+	virtual void Advance(const double dt)
 	{
 		deformable_object.Advance(dt);
-		Sync_Simulation_And_Visualization_Data();
-		OpenGLViewer::Toggle_Next_Frame();
-	}
-
-	virtual void Run()
-	{
-		OpenGLViewer::Run();
 	}
 
 	////Keyboard interaction
@@ -262,6 +251,16 @@ protected:
 		opengl_point->Set_Data_Refreshed();
 		opengl_point->Initialize();
 	}
+	void Add_handle() 
+	{
+		handle_sphere = Add_Interactive_Object<OpenGLSphere>();
+		handle_sphere->pos = deformable_object.handle_sphere_pos;
+		handle_sphere->radius = deformable_object.dx; // deformable_object.handle_sphere_r;
+		handle_sphere->color = OpenGLColor(static_cast < float> (1.), static_cast < float>(0.2), static_cast < float>(0.));
+		handle_sphere->Set_Data_Refreshed();
+		handle_sphere->Initialize();
+	}
+	
 
 	////Helper function to convert a vector to 3d, for c++ template
 	Vector3 V3(const Vector2& v2){return Vector3(v2[0],v2[1],.0);}
