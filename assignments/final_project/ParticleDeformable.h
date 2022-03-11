@@ -56,7 +56,7 @@ public:
 	//springs if use mesh format
 	std::vector<Vector2i> springs;
 	//cluster part
-	bool useCluster = true;
+	bool useCluster = false;
 	std::vector<int> cluster_one_index;
 	std::vector<int> cluster_two_index;
 	//cluster one
@@ -120,16 +120,8 @@ public:
 	}
 
 	void divide_Two_Clusters() {
-		double minY = 100.0;
-		double maxY = -100.0;
 		for (int i = 0; i < particles.Size(); i++) {
-			if(particles.X(i)[1] > maxY) maxY = particles.X(i)[1];
-			if(particles.X(i)[1] < minY) minY = particles.X(i)[1];
-		}
-		double step = (maxY - minY ) / 2.0;
-		double tmp  = minY + step;
-		for (int i = 0; i < particles.Size(); i++) {
-			if(particles.X(i)[1] <=5.0) {
+			if(particles.X(i)[1] <=6.0) {
 				int k = cluster_one.Add_Element();
 				cluster_one.X(k) = particles.X(i);
 				cluster_one.V(k) = particles.V(i);
@@ -446,12 +438,12 @@ public:
 		for(int i = 0;i<cluster_one.Size();i++) {
 			int index = cluster_one_index[i];
 			VectorD diff = cluster_one.V(i) - particles.V(index);
-			particles.V(index) += 0.5 * diff;
+			particles.V(index) += 0.75 * diff;
 		}
 		for(int i = 0; i< cluster_two.Size();i++) {
 			int index = cluster_two_index[i];
 			VectorD diff = cluster_one.V(i) - particles.V(index);
-			particles.V(index) += 0.2 * diff;
+			particles.V(index) += 0.3 * diff;
 		}
 		
 	}
