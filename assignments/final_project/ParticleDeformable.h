@@ -48,11 +48,38 @@ public:
 	double alpha = .5;
 	double beta = .8;
 	double decay = 1.;
+	double alpha_cluster = .4;
+
 
 	////a list of implicit geometries describing the environment, by default it has one element, a circle with its normals pointing inward (Bowl)
 	std::vector<ImplicitGeometry<d>* > env_objects;	
 	//springs if use mesh format
 	std::vector<Vector2i> springs;
+	//cluster part
+	bool useCluster = true;
+	std::vector<int> cluster_one_index;
+	std::vector<int> cluster_two_index;
+	//cluster one
+	Particles<d> cluster_one;
+	double total_mass_cluster_one = 0.0;
+	std::vector<VectorD> init_positions_cluster_one;
+	std::vector<VectorD> qs_cluster_one;
+	std::vector<Vector<double, 9>> qs_tilde_cluster_one;
+	VectorD init_COM_cluster_one = VectorD::Zero();
+	VectorD curr_COM_cluster_one = VectorD::Zero();
+	Matrix3 Aqq_cluster_one = Matrix3::Zero();
+	Eigen::Matrix<double, 9, 9> Aqq_tilde_cluster_one = Eigen::Matrix<double, 9, 9>::Zero();
+
+	//cluster two
+	Particles<d> cluster_two;
+	double total_mass_cluster_two = 0.0;
+	std::vector<VectorD> init_positions_cluster_two;
+	std::vector<VectorD> qs_cluster_two;
+	std::vector<Vector<double, 9>> qs_tilde_cluster_two;
+	VectorD init_COM_cluster_two = VectorD::Zero();
+	VectorD curr_COM_cluster_two = VectorD::Zero();
+	Matrix3 Aqq_cluster_two = Matrix3::Zero();
+	Eigen::Matrix<double, 9, 9> Aqq_tilde_cluster_two = Eigen::Matrix<double, 9, 9>::Zero();
 
 	void Initialize() {
 		for (int i = 0; i < particles.Size(); i++) {
@@ -83,9 +110,100 @@ public:
 		Aqq_tilde = Aqq_tilde.llt().solve(Eigen::Matrix<double, 9, 9>::Identity());
 
 		phis.resize(particles.Size());
+
+		if(useCluster) {
+			divide_Two_Clusters();
+			cluster_one_Initialize();
+			cluster_two_Initialize();
+		}
+
 	}
 
+	void divide_Two_Clusters() {
+		double minY = 100.0;
+		double maxY = -100.0;
+		for (int i = 0; i < particles.Size(); i++) {
+			if(particles.X(i)[1] > maxY) maxY = particles.X(i)[1];
+			if(particles.X(i)[1] < minY) minY = particles.X(i)[1];
+		}
+		double step = (maxY - minY ) / 2.0;
+		double tmp  = minY + step;
+		for (int i = 0; i < particles.Size(); i++) {
+			if(particles.X(i)[1] <=5.0) {
+				int k = cluster_one.Add_Element();
+				cluster_one.X(k) = particles.X(i);
+				cluster_one.V(k) = particles.V(i);
+				cluster_one.M(k) = particles.M(i);
+				cluster_one.R(k) = particles.R(i);
+				cluster_one_index.push_back(i);
+			}else {
+				int k = cluster_two.Add_Element();
+				cluster_two.X(k) = particles.X(i);
+				cluster_two.V(k) = particles.V(i);
+				cluster_two.M(k) = particles.M(i);
+				cluster_two.R(k) = particles.R(i);
+				cluster_two_index.push_back(i);
+			}
+		}
+	}
+	void cluster_one_Initialize() {
+			for (int i = 0; i < cluster_one.Size(); i++) {
+			init_positions_cluster_one.push_back(cluster_one.X(i));
+			init_COM_cluster_one += cluster_one.M(i) * cluster_one.X(i);
+			total_mass_cluster_one += cluster_one.M(i);
+		}
+		init_COM_cluster_one /= total_mass_cluster_one;
+		// Record the qs
+		for (int i = 0; i < cluster_one.Size(); i++) {
+			qs_cluster_one.push_back(cluster_one.X(i)-init_COM_cluster_one);
+		}
+		// Compute Aqq and Aqq_tilde
+		for (int i = 0; i < cluster_one.Size(); i++) {
+			VectorD qi = qs_cluster_one[i];
+			//Aqq
+			Aqq_cluster_one += cluster_one.M(i) * qi * qi.transpose();
+			//Aqq tilde
+			Vector<double, 9> qi_tilde;
+			qi_tilde << qi(0), qi(1), qi(2),
+				qi(0)* qi(0), qi(1)* qi(1), qi(2)* qi(2),
+				qi(0)* qi(1), qi(1)* qi(2), qi(2)* qi(0);
+			qs_tilde_cluster_one.push_back(qi_tilde);
+			Aqq_tilde_cluster_one += cluster_one.M(i) * qi_tilde * qi_tilde.transpose();
+		}
+		//its important that we do this instead of A.inverse(), since direct solving will behave bad when we have entries like 1.e-15
+		Aqq_cluster_one = Aqq_cluster_one.llt().solve(Matrix3::Identity()); // LLT assumes that Aqq is symmetric positive definite
+		Aqq_tilde_cluster_one = Aqq_tilde_cluster_one.llt().solve(Eigen::Matrix<double, 9, 9>::Identity());
+	}
 	// modify qs, qs_tilde, Aqq, Aqq_tilde to reflect plasticity
+
+	void cluster_two_Initialize() {
+			for (int i = 0; i < cluster_two.Size(); i++) {
+			init_positions_cluster_two.push_back(cluster_two.X(i));
+			init_COM_cluster_two += cluster_two.M(i) * cluster_two.X(i);
+			total_mass_cluster_two += cluster_two.M(i);
+		}
+		init_COM_cluster_two /= total_mass_cluster_two;
+		// Record the qs
+		for (int i = 0; i < cluster_two.Size(); i++) {
+			qs_cluster_two.push_back(cluster_two.X(i)-init_COM_cluster_two);
+		}
+		// Compute Aqq and Aqq_tilde
+		for (int i = 0; i < cluster_two.Size(); i++) {
+			VectorD qi = qs_cluster_two[i];
+			//Aqq
+			Aqq_cluster_two += cluster_two.M(i) * qi * qi.transpose();
+			//Aqq tilde
+			Vector<double, 9> qi_tilde;
+			qi_tilde << qi(0), qi(1), qi(2),
+				qi(0)* qi(0), qi(1)* qi(1), qi(2)* qi(2),
+				qi(0)* qi(1), qi(1)* qi(2), qi(2)* qi(0);
+			qs_tilde_cluster_two.push_back(qi_tilde);
+			Aqq_tilde_cluster_two += cluster_two.M(i) * qi_tilde * qi_tilde.transpose();
+		}
+		//its important that we do this instead of A.inverse(), since direct solving will behave bad when we have entries like 1.e-15
+		Aqq_cluster_two = Aqq_cluster_two.llt().solve(Matrix3::Identity()); // LLT assumes that Aqq is symmetric positive definite
+		Aqq_tilde_cluster_two = Aqq_tilde_cluster_two.llt().solve(Eigen::Matrix<double, 9, 9>::Identity());
+	}
 	void Register_Plasticity() {
 		// RE-Record the qs
 		qs.clear();
@@ -251,22 +369,20 @@ public:
 			particles.V(i) += alpha * 1. / dt * (gi - particles.X(i));
 		}
 	}
-
-		void Cluster_Shape_Match_Quadratic(const double dt, int cluster_num) {
-	
+	void One_Cluster_Shape_Match_Quadratic(const double dt ) {
 		////Compute the force term that corresponds to g - x / h in the paper
 		// update curr COM
-		curr_COM = VectorD::Zero();
-		for (int i = 0; i < particles.Size(); i++) {
-			curr_COM += particles.M(i) * particles.X(i);
+		curr_COM_cluster_one = VectorD::Zero();
+		for (int i = 0; i < cluster_one.Size(); i++) {
+			curr_COM_cluster_one += cluster_one.M(i) * cluster_one.X(i);
 		}
-		curr_COM /= total_mass;
+		curr_COM_cluster_one /= total_mass_cluster_one;
 		// compute g
 		Matrix3 Apq = Matrix3::Zero();
-		for (int i = 0; i < particles.Size(); i++) {
-			VectorD qi = qs[i];
-			VectorD pi = particles.X(i) - curr_COM;
-			Apq += particles.M(i) * pi * qi.transpose();
+		for (int i = 0; i < cluster_one.Size(); i++) {
+			VectorD qi = qs_cluster_one[i];
+			VectorD pi = cluster_one.X(i) - curr_COM_cluster_one;
+			Apq += cluster_one.M(i) * pi * qi.transpose();
 		}
 		Matrix3 S = (Apq.transpose() * Apq);
 		S = S.sqrt();
@@ -275,17 +391,69 @@ public:
 		R_tilde.block<3, 3>(0, 0) = R;
 		//Compute A_tilde via quadratic
 		Eigen::Matrix<double, 3, 9> Apq_tilde = Eigen::Matrix<double, 3, 9>::Zero();
-		for (int i = 0; i < particles.Size(); i++) {
-			Vector<double, 9> qi_tilde = qs_tilde[i];
-			VectorD pi = particles.X(i) - curr_COM;
-			Apq_tilde += particles.M(i) * pi * qi_tilde.transpose();
+		for (int i = 0; i < cluster_one.Size(); i++) {
+			Vector<double, 9> qi_tilde = qs_tilde_cluster_one[i];
+			VectorD pi = cluster_one.X(i) - curr_COM_cluster_one;
+			Apq_tilde += cluster_one.M(i) * pi * qi_tilde.transpose();
 		}
-		Eigen::Matrix<double, 3, 9> A_tilde = Apq_tilde * Aqq_tilde;
+		Eigen::Matrix<double, 3, 9> A_tilde = Apq_tilde * Aqq_tilde_cluster_one;
 
-		for (int i = 0; i < particles.Size(); i++) {
-			VectorD gi = (beta * A_tilde + (1 - beta) * R_tilde) * (qs_tilde[i]) + curr_COM;
-			particles.V(i) += alpha * 1. / dt * (gi - particles.X(i));
+		for (int i = 0; i < cluster_one.Size(); i++) {
+			VectorD gi = (beta * A_tilde + (1 - beta) * R_tilde) * (qs_tilde_cluster_one[i]) + curr_COM_cluster_one;
+			cluster_one.V(i) += alpha_cluster * 1. / dt * (gi - cluster_one.X(i));
 		}
+	}
+	void Two_Cluster_Shape_Match_Quadratic(const double dt ) {
+		////Compute the force term that corresponds to g - x / h in the paper
+		// update curr COM
+		curr_COM_cluster_two = VectorD::Zero();
+		for (int i = 0; i < cluster_two.Size(); i++) {
+			curr_COM_cluster_two += cluster_two.M(i) * cluster_two.X(i);
+		}
+		curr_COM_cluster_two /= total_mass_cluster_two;
+		// compute g
+		Matrix3 Apq = Matrix3::Zero();
+		for (int i = 0; i < cluster_two.Size(); i++) {
+			VectorD qi = qs_cluster_two[i];
+			VectorD pi = cluster_two.X(i) - curr_COM_cluster_two;
+			Apq += cluster_two.M(i) * pi * qi.transpose();
+		}
+		Matrix3 S = (Apq.transpose() * Apq);
+		S = S.sqrt();
+		Matrix3 R = Apq * S.llt().solve(Matrix3::Identity());
+		Eigen::Matrix<double, 3, 9> R_tilde = Eigen::Matrix<double, 3, 9>::Zero();
+		R_tilde.block<3, 3>(0, 0) = R;
+		//Compute A_tilde via quadratic
+		Eigen::Matrix<double, 3, 9> Apq_tilde = Eigen::Matrix<double, 3, 9>::Zero();
+		for (int i = 0; i < cluster_two.Size(); i++) {
+			Vector<double, 9> qi_tilde = qs_tilde_cluster_two[i];
+			VectorD pi = cluster_two.X(i) - curr_COM_cluster_two;
+			Apq_tilde += cluster_two.M(i) * pi * qi_tilde.transpose();
+		}
+		Eigen::Matrix<double, 3, 9> A_tilde = Apq_tilde * Aqq_tilde_cluster_two;
+
+		for (int i = 0; i < cluster_two.Size(); i++) {
+			VectorD gi = (beta * A_tilde + (1 - beta) * R_tilde) * (qs_tilde_cluster_two[i]) + curr_COM_cluster_two;
+			cluster_two.V(i) += alpha_cluster * 1. / dt * (gi - cluster_two.X(i));
+		}
+	}
+		void Clusters_Shape_Match_Quadratic(const double dt) {
+		
+		 	One_Cluster_Shape_Match_Quadratic(dt);
+		 	Two_Cluster_Shape_Match_Quadratic(dt);
+		// //Update particles.V
+
+		for(int i = 0;i<cluster_one.Size();i++) {
+			int index = cluster_one_index[i];
+			VectorD diff = cluster_one.V(i) - particles.V(index);
+			particles.V(index) += 0.5 * diff;
+		}
+		for(int i = 0; i< cluster_two.Size();i++) {
+			int index = cluster_two_index[i];
+			VectorD diff = cluster_one.V(i) - particles.V(index);
+			particles.V(index) += 0.2 * diff;
+		}
+		
 	}
 
 	void Test_Specific_Vel_Operations() {
@@ -335,7 +503,9 @@ public:
 		//Shape_Match_Basic(dt);
 		//Shape_Match_Linear(dt);
 		Shape_Match_Quadratic(dt);
-		Cluster_Shape_Match_Quadratic(dt);
+		if(useCluster){
+			Clusters_Shape_Match_Quadratic(dt);
+		}
 		//Shape_Match_Quadratic_Plasticity(dt);
 
 		for(int i=0;i<particles.Size();i++){
