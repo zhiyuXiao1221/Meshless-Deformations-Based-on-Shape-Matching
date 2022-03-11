@@ -31,7 +31,7 @@ template<int d> class ParticleDeformableDriver : public InClassDemoDriver
 public:
 	virtual void Initialize_Simulation_Data()
 	{
-		int test = 6;
+		int test = 7;
 		deformable_object.test = test;
 		switch (test) {
 		case 1:	Initialize_1(); break; //Lattice dropping to floor
@@ -40,6 +40,8 @@ public:
 		case 4:	Initialize_4(); break; //Bunny spring deformed by force
 		case 5:	Initialize_5(); break; //Cube spring deformed by force
 		case 6:	Initialize_4(); break; //Bunny mesh(with texture) deformed by force
+		case 7:	Initialize_6(); break; //Clusters demo
+		
 		}
 		deformable_object.Initialize();
 	}
@@ -182,6 +184,7 @@ public:
 		
 	void Initialize_5() {
 		double dx = 0.02;
+		deformable_object.dx = dx;
 		std::string obj_mesh_name="/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/cube.obj";	
 		Read_From_Obj(obj_mesh_name,0.03);
 		deformable_object.handle_sphere_idx = 5;
@@ -199,6 +202,34 @@ public:
 		}
 
 		double influence_radius = 3. * dx;
+		deformable_object.weight *= 2.0;
+		deformable_object.handle_sphere_influenced_radius = influence_radius;
+
+		//Bowl<d> *bowl=new Bowl<d>(VectorD::Unit(1)*8,8);
+		//deformable_object.env_objects.push_back(bowl);
+		Plane <d>* plane = new Plane<d>(VectorD::Unit(1), VectorD::Zero());
+		deformable_object.env_objects.push_back(plane);
+	}
+
+		void Initialize_6() {
+		double dx = 0.02;
+		std::string obj_mesh_name="/Users/dhyscuduke/Desktop/PhysicalComputingFinal/physical_computing_final_project/obj/four_clusters.obj";	
+		Read_From_Obj(obj_mesh_name,0.03);
+		deformable_object.handle_sphere_idx = 5;
+		deformable_object.handle_sphere_pos = deformable_object.particles.X(deformable_object.handle_sphere_idx);
+		deformable_object.init_handle_sphere_pos = deformable_object.handle_sphere_pos;
+		deformable_object.handle_sphere_r = 0.1;
+
+		for (int i = 0; i < deformable_object.particles.Size(); i++) {
+			if (deformable_object.particles.X(i)[1] <= 0.050022) {
+				deformable_object.fixed.push_back(1);
+			}
+			else {
+				deformable_object.fixed.push_back(0);
+			}
+		}
+
+		double influence_radius = 2. * dx;
 		deformable_object.handle_sphere_influenced_radius = influence_radius;
 
 		//Bowl<d> *bowl=new Bowl<d>(VectorD::Unit(1)*8,8);

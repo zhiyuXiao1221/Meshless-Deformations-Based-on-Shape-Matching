@@ -19,6 +19,7 @@ public:
 	VectorD handle_sphere_pos = VectorD::Zero();
 	VectorD init_handle_sphere_pos = VectorD::Zero();
 	int handle_sphere_idx = -1;
+	double weight = 1.0;
 	double handle_sphere_influenced_radius = 0.;
 	std::vector<int> handle_sphere_influenced_idx;
 	std::vector<double> handle_sphere_influenced_dist;
@@ -251,6 +252,42 @@ public:
 		}
 	}
 
+		void Cluster_Shape_Match_Quadratic(const double dt, int cluster_num) {
+	
+		////Compute the force term that corresponds to g - x / h in the paper
+		// update curr COM
+		curr_COM = VectorD::Zero();
+		for (int i = 0; i < particles.Size(); i++) {
+			curr_COM += particles.M(i) * particles.X(i);
+		}
+		curr_COM /= total_mass;
+		// compute g
+		Matrix3 Apq = Matrix3::Zero();
+		for (int i = 0; i < particles.Size(); i++) {
+			VectorD qi = qs[i];
+			VectorD pi = particles.X(i) - curr_COM;
+			Apq += particles.M(i) * pi * qi.transpose();
+		}
+		Matrix3 S = (Apq.transpose() * Apq);
+		S = S.sqrt();
+		Matrix3 R = Apq * S.llt().solve(Matrix3::Identity());
+		Eigen::Matrix<double, 3, 9> R_tilde = Eigen::Matrix<double, 3, 9>::Zero();
+		R_tilde.block<3, 3>(0, 0) = R;
+		//Compute A_tilde via quadratic
+		Eigen::Matrix<double, 3, 9> Apq_tilde = Eigen::Matrix<double, 3, 9>::Zero();
+		for (int i = 0; i < particles.Size(); i++) {
+			Vector<double, 9> qi_tilde = qs_tilde[i];
+			VectorD pi = particles.X(i) - curr_COM;
+			Apq_tilde += particles.M(i) * pi * qi_tilde.transpose();
+		}
+		Eigen::Matrix<double, 3, 9> A_tilde = Apq_tilde * Aqq_tilde;
+
+		for (int i = 0; i < particles.Size(); i++) {
+			VectorD gi = (beta * A_tilde + (1 - beta) * R_tilde) * (qs_tilde[i]) + curr_COM;
+			particles.V(i) += alpha * 1. / dt * (gi - particles.X(i));
+		}
+	}
+
 	void Test_Specific_Vel_Operations() {
 		if (test != 1) {
 
@@ -269,7 +306,7 @@ public:
 					VectorD change = 10. * diff;
 					decay = 3. / (handle_sphere_influenced_radius);
 					change *= exp(-decay * handle_sphere_influenced_dist[i]);
-					particles.V(handle_sphere_influenced_idx[i]) += change;
+					particles.V(handle_sphere_influenced_idx[i]) += weight*change;
 				}
 			}
 
@@ -298,6 +335,7 @@ public:
 		//Shape_Match_Basic(dt);
 		//Shape_Match_Linear(dt);
 		Shape_Match_Quadratic(dt);
+		Cluster_Shape_Match_Quadratic(dt);
 		//Shape_Match_Quadratic_Plasticity(dt);
 
 		for(int i=0;i<particles.Size();i++){
