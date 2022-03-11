@@ -450,8 +450,8 @@ public:
 		}
 		for(int i = 0; i< cluster_two.Size();i++) {
 			int index = cluster_two_index[i];
-			VectorD diff = cluster_one.V(i) - particles.V(index);
-			particles.V(index) += 0.2 * diff;
+			VectorD diff = cluster_two.V(i) - particles.V(index);
+			particles.V(index) += 0.5 * diff;
 		}
 		
 	}
