@@ -4,6 +4,7 @@
 
 Implementation of Müller, Matthias, et al. "Meshless deformations based on shape matching." ACM transactions on graphics (TOG) 24.3 (2005): 471-478.
 
+[The presentation slide link(include demos and results)](https://docs.google.com/presentation/d/132QbHPjNALq0Bzg6jysMY3O5C7fggy7zpvF8CZLaKBc/edit#slide=id.p)
 
 ## 1. Compile and run this project:
 
